@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Axiom Auto Components · Operations Summary</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f5f1e8;
+    --card: #ffffff;
+    --ink: #0f172a;
+    --ink-2: #334155;
+    --muted: #64748b;
+    --line: #e7e1d3;
+    --good: #15803d;  --good-bg: #dcfce7;
+    --bad:  #b91c1c;  --bad-bg:  #fee2e2;
+    --radius: 12px;
+    --font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--font); background: var(--page); color: var(--ink); font-size: 14px;
+         -webkit-font-smoothing: antialiased; }
+
+  header.top { max-width: 1280px; margin: 0 auto; padding: 22px 24px 14px; display: flex; flex-wrap: wrap;
+               gap: 14px; align-items: flex-end; justify-content: space-between; border-bottom: 2px solid #c7d2e3; }
+  header.top h1 { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -.01em; }
+  header.top p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+  .filters { display: flex; gap: 10px; }
+  .field { display: flex; flex-direction: column; gap: 3px; }
+  .field label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  select { font: inherit; font-size: 13px; color: var(--ink); background: #fff; border: 1px solid #cbd5e1; border-radius: 8px;
+           padding: 7px 28px 7px 10px; min-width: 130px; cursor: pointer; }
+  select:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+
+  main { max-width: 1280px; margin: 0 auto; padding: 18px 24px 8px; display: grid; gap: 16px; }
+  .grid { display: grid; gap: 16px; }
+  .cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 1px 2px rgba(15,23,42,.05); }
+  .card-title { font-size: 15px; font-weight: 700; margin: 0; padding: 16px 18px 0; }
+  .card-sub { font-size: 12px; color: var(--muted); padding: 2px 18px 0; }
+  .card-body { padding: 10px 14px 14px; }
+  .chart { position: relative; height: 270px; }
+  .chart.tall { height: 340px; }
+  .empty { display: none; color: var(--muted); font-size: 13px; text-align: center; padding: 90px 10px; }
+  .card.is-empty .chart { display: none; }
+  .card.is-empty .empty { display: block; }
+
+  /* Metric tiles (first row: coloured, like the reference) */
+  .tile { padding: 16px 18px; border-radius: var(--radius); border: 1px solid; display: flex; flex-direction: column; gap: 4px; }
+  .tile .label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+  .tile .value { font-size: 30px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.15; }
+  .tile .meta { font-size: 12px; color: var(--muted); }
+  .tile.blue   { background: #eef4ff; border-color: #bcd3fb; } .tile.blue .label, .tile.blue .value { color: #1d4ed8; }
+  .tile.green  { background: #ecfbf1; border-color: #b7e8c8; } .tile.green .label, .tile.green .value { color: #15803d; }
+  .tile.purple { background: #f4effe; border-color: #d6c4fb; } .tile.purple .label, .tile.purple .value { color: #7e22ce; }
+  .tile.orange { background: #fff4ea; border-color: #f9cfa5; } .tile.orange .label, .tile.orange .value { color: #c2410c; }
+
+  /* Comparison tiles (second row: prior window -> current window, with change) */
+  .cmp { padding: 14px 18px; display: flex; flex-direction: column; gap: 6px; }
+  .cmp .label { font-size: 12px; font-weight: 700; color: var(--ink-2); text-transform: uppercase; letter-spacing: .04em; }
+  .cmp .row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .cmp .value { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .cmp .path { font-size: 12px; color: var(--muted); }
+  .pill { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+  .pill.good { color: var(--good); background: var(--good-bg); }
+  .pill.bad { color: var(--bad); background: var(--bad-bg); }
+  .pill.flat { color: var(--muted); background: #eef1f5; }
+
+  /* Chat */
+  .chat { display: flex; flex-direction: column; }
+  .chat .card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 16px 18px 0; }
+  .chat .card-head h2 { font-size: 15px; font-weight: 700; margin: 0; }
+  .link { font: inherit; font-size: 13px; color: var(--muted); background: none; border: 0; cursor: pointer; padding: 4px 0; }
+  .link:hover { color: var(--ink); text-decoration: underline; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 18px 0; }
+  .chip { font: inherit; font-size: 13px; color: #1d4ed8; background: #eef4ff; border: 1px solid #bcd3fb; border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+  .chip:hover { background: #dbeafe; }
+  .messages { min-height: 160px; max-height: 420px; overflow-y: auto; padding: 14px 18px; display: flex; flex-direction: column; gap: 10px; }
+  .msg { max-width: 82%; padding: 10px 14px; border-radius: 12px; font-size: 14px; white-space: pre-wrap; line-height: 1.5; }
+  .msg.user { align-self: flex-end; background: #1d4ed8; color: #fff; border-bottom-right-radius: 4px; }
+  .msg.bot { align-self: flex-start; background: #faf8f3; border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+  .msg .tag { display: block; font-size: 10.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+  .msg.error .msg-text { color: var(--bad); }
+  .msg-text.typing { color: var(--muted); }
+  .msg-text.typing::after { content: "..."; animation: dots 1.2s steps(4, end) infinite; }
+  @keyframes dots { 0% { content: ""; } 33% { content: "."; } 66% { content: ".."; } 100% { content: "..."; } }
+  .empty-chat { color: var(--muted); font-size: 13px; margin: auto; text-align: center; max-width: 460px; }
+  .composer { display: flex; gap: 10px; padding: 12px 18px 16px; border-top: 1px solid var(--line); }
+  .composer input { flex: 1; font: inherit; font-size: 14px; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; color: var(--ink); }
+  .composer button { font: inherit; font-size: 14px; font-weight: 700; color: #fff; background: #1d4ed8; border: 0; border-radius: 10px; padding: 0 18px; cursor: pointer; }
+  .composer button:disabled, .composer input:disabled { opacity: .55; cursor: default; }
+
+  footer.foot { max-width: 1280px; margin: 0 auto; padding: 4px 24px 32px; color: var(--muted); font-size: 12px; }
+
+  @media (max-width: 1040px) { .cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cols-3 { grid-template-columns: 1fr; } }
+  @media (max-width: 760px) { .cols-2, .cols-4, .cols-5 { grid-template-columns: 1fr; } .msg { max-width: 100%; } .tile .value { font-size: 24px; } }
+
+  /* Assistant answers: readable measure, clear paragraphs, lists and emphasis */
+  .msg.bot { max-width: 88%; padding: 14px 18px; font-size: 14.5px; line-height: 1.65; color: var(--ink-2);
+             white-space: normal; background: #fbfaf6; border-color: #e4ddcb; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
+  .msg.bot .tag { margin-bottom: 8px; }
+  .msg.bot p { margin: 0 0 10px; }
+  .msg.bot p:last-child { margin-bottom: 0; }
+  .msg.bot p.heading { margin: 12px 0 6px; font-weight: 700; color: var(--ink); font-size: 14.5px; }
+  .msg.bot ul { margin: 0 0 10px; padding-left: 20px; }
+  .msg.bot li { margin: 0 0 6px; padding-left: 2px; }
+  .msg.bot li::marker { color: #1d4ed8; }
+  .msg.bot strong { color: var(--ink); font-weight: 700; }
+  .msg.bot code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; background: #eef1f5;
+                  color: #0f172a; padding: 1px 6px; border-radius: 6px; }
+  .msg.user { max-width: 72%; font-size: 14px; }
+  .msg.bot.error { border-color: #fecaca; background: #fff7f7; }
+  input.date { font: inherit; font-size: 13px; color: var(--ink); background: #fff; border: 1px solid #cbd5e1; border-radius: 8px;
+               padding: 6px 10px; min-width: 150px; cursor: pointer; color-scheme: light; }
+  .quick .label-spacer { display: block; font-size: 10.5px; line-height: 1; visibility: hidden; }
+  .quick-links { font-size: 12.5px; color: var(--muted); padding-top: 7px; display: inline-block; }
+  .cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  @media (max-width: 1180px) { .cols-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div>
+    <h1>Axiom Operations Summary</h1>
+    <p id="subtitle"></p>
+  </div>
+  <div class="filters">
+    <div class="field">
+      <label for="fFrom">From</label>
+      <input type="date" id="fFrom" class="date">
+    </div>
+    <div class="field">
+      <label for="fTo">To</label>
+      <input type="date" id="fTo" class="date">
+    </div>
+    <div class="field quick">
+      <span class="label-spacer">&nbsp;</span>
+      <span class="quick-links"><button type="button" class="link" id="quickLast30">Last 30 days</button> · <button type="button" class="link" id="quickAll">All data</button></span>
+    </div>
+    <div class="field">
+      <label for="fPlant">Plant</label>
+      <select id="fPlant"></select>
+    </div>
+    <div class="field">
+      <label for="fShift">Shift</label>
+      <select id="fShift"></select>
+    </div>
+    <div class="field">
+      <label for="fMaterial">Material</label>
+      <select id="fMaterial"></select>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="grid cols-4" id="tiles" aria-label="Headline metrics"></section>
+
+  <section class="grid cols-3" id="comparisons" aria-label="Change over the last 30 days"></section>
+
+  <section class="grid cols-5" id="quality" aria-label="Quality and materials"></section>
+
+  <section class="grid cols-2">
+    <article class="card" id="cardDowntime">
+      <h2 class="card-title">Unplanned downtime by failure category</h2>
+      <p class="card-sub">Share of linked downtime minutes</p>
+      <div class="card-body"><div class="chart"><canvas id="chartDowntime" role="img" aria-label="Pie chart of downtime by failure category"></canvas></div><p class="empty">No downtime events for this selection.</p></div>
+    </article>
+    <article class="card" id="cardPlantLoss">
+      <h2 class="card-title">Loss by plant (USD)</h2>
+      <p class="card-sub">Scrap cost and repair cost</p>
+      <div class="card-body"><div class="chart"><canvas id="chartPlantLoss" role="img" aria-label="Stacked bar chart of loss by plant"></canvas></div><p class="empty">No runs for this selection.</p></div>
+    </article>
+  </section>
+
+  <section class="grid cols-2">
+    <article class="card" id="cardProduct">
+      <h2 class="card-title">Production runs by product</h2>
+      <p class="card-sub">Clean runs per product family</p>
+      <div class="card-body"><div class="chart"><canvas id="chartProduct" role="img" aria-label="Pie chart of runs by product"></canvas></div><p class="empty">No runs for this selection.</p></div>
+    </article>
+    <article class="card" id="cardLine">
+      <h2 class="card-title">Scrap rate by plant and line</h2>
+      <p class="card-sub">Scrapped units ÷ produced units</p>
+      <div class="card-body"><div class="chart tall"><canvas id="chartLine" role="img" aria-label="Horizontal bar chart of scrap rate by line"></canvas></div><p class="empty">No runs for this selection.</p></div>
+    </article>
+  </section>
+
+  <section class="grid cols-2">
+    <article class="card" id="cardTrend">
+      <h2 class="card-title">Daily plan attainment and scrap rate</h2>
+      <p class="card-sub">Plan attainment on the left axis, scrap rate on the right</p>
+      <div class="card-body"><div class="chart"><canvas id="chartTrend" role="img" aria-label="Line chart of daily plan attainment and scrap rate"></canvas></div><p class="empty">No runs for this selection.</p></div>
+    </article>
+    <article class="card" id="cardDowntimeTrend">
+      <h2 class="card-title">Daily unplanned downtime (minutes)</h2>
+      <p class="card-sub">Daily total and 7-day average, by event date</p>
+      <div class="card-body"><div class="chart"><canvas id="chartDowntimeTrend" role="img" aria-label="Line chart of daily unplanned downtime"></canvas></div><p class="empty">No downtime events for this selection.</p></div>
+    </article>
+  </section>
+
+  <section class="grid cols-2">
+    <article class="card" id="cardMachine">
+      <h2 class="card-title">Loss by machine (USD)</h2>
+      <p class="card-sub">Scrap cost plus repair cost</p>
+      <div class="card-body"><div class="chart tall"><canvas id="chartMachine" role="img" aria-label="Horizontal bar chart of loss by machine"></canvas></div><p class="empty">No runs for this selection.</p></div>
+    </article>
+    <article class="card" id="cardSupplier">
+      <h2 class="card-title">Incoming QC fail rate by supplier</h2>
+      <p class="card-sub">Failed material records ÷ material records</p>
+      <div class="card-body"><div class="chart tall"><canvas id="chartSupplier" role="img" aria-label="Horizontal bar chart of QC fail rate by supplier"></canvas></div><p class="empty">No material records for this selection.</p></div>
+    </article>
+  </section>
+
+  
+    <section class="grid cols-2">
+    <article class="card" id="cardDefect">
+      <h2 class="card-title">Defects by type</h2>
+      <p class="card-sub">Defect count from inspections. Hover for rate, inspections and sample size.</p>
+      <div class="card-body"><div class="chart"><canvas id="chartDefect" role="img" aria-label="Horizontal bar chart of defects by defect type"></canvas></div><p class="empty">No inspections for this selection.</p></div>
+    </article>
+    <article class="card" id="cardMaterial">
+      <h2 class="card-title">Materials by type: incoming QC fail rate</h2>
+      <p class="card-sub">Failed records ÷ material records. The material filter highlights the selected type; hover for cost and quality means.</p>
+      <div class="card-body"><div class="chart"><canvas id="chartMaterial" role="img" aria-label="Bar chart of incoming QC fail rate by material type"></canvas></div><p class="empty">No material records for this selection.</p></div>
+    </article>
+  </section>
+
+  <section class="card chat" aria-labelledby="chatTitle">
+    <div class="card-head">
+      <h2 id="chatTitle">Ask the assistant</h2>
+      <button type="button" class="link" id="clearChat">Clear conversation</button>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="messages" id="messages" aria-live="polite"></div>
+    <form class="composer" id="composer">
+      <label for="question" style="position:absolute;left:-9999px;">Your question</label>
+      <input id="question" type="text" maxlength="500" placeholder="Ask about losses, downtime, suppliers or actions" autocomplete="off">
+      <button type="submit" id="send">Send</button>
+    </form>
+  </section>
+</main>
+
+<footer class="foot" id="about"></footer>
+
+<script>
+const DATA = /*__KPI_DATA__*/null;
+/*__AGGREGATE_JS__*/
+const AGG = createAggregator(DATA.rows);
+
+// Safe, minimal formatting for assistant replies: paragraphs, bullet lists, **bold**, `code`, short headings.
+// Everything is built with DOM nodes, so model output is never parsed as HTML.
+function appendInline(node, text) {
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`\n]+`)/);
+  for (const part of parts) {
+    if (!part) continue;
+    if (part.length > 4 && part.startsWith("**") && part.endsWith("**")) node.append(el("strong", {}, part.slice(2, -2)));
+    else if (part.length > 2 && part.startsWith("`") && part.endsWith("`")) node.append(el("code", {}, part.slice(1, -1)));
+    else node.append(document.createTextNode(part));
+  }
+}
+
+function renderMarkdown(text) {
+  const frag = document.createDocumentFragment();
+  const bullet = /^\s*(?:[-*•])\s+/;
+  let list = null, para = null;
+  const closeAll = () => { list = null; para = null; };
+  for (const raw of String(text).split("\n")) {
+    const line = raw.replace(/\s+$/, "");
+    if (!line.trim()) { closeAll(); continue; }
+    if (/^\s*#{1,4}\s+/.test(line)) {
+      closeAll();
+      const h = el("p", {class: "heading"});
+      appendInline(h, line.replace(/^\s*#{1,4}\s+/, ""));
+      frag.append(h);
+    } else if (bullet.test(line)) {
+      if (!list) { list = el("ul"); frag.append(list); }
+      para = null;
+      const li = el("li");
+      appendInline(li, line.replace(bullet, ""));
+      list.append(li);
+    } else {
+      list = null;
+      if (!para) { para = el("p"); frag.append(para); } else { para.append(el("br")); }
+      appendInline(para, line.trim());
+    }
+  }
+  return frag;
+}
+
+function renderInto(node, text) {
+  node.replaceChildren(renderMarkdown(text));
+}
+
+// ---- Chat --------------------------------------------------------------------------------
+const CHIPS = [
+  "Where are the biggest losses?",
+  "Are jams causing our downtime?",
+  "Which supplier is the problem?",
+  "What should we do first?",
+  "Which plant needs attention most?",
+];
+const TAG_LABELS = {llm: "Assistant", pipeline: "From pipeline results", refused: "Outside the data",
+                    unavailable: "Not connected", error: "Problem"};
+
+let history = [];     // {role, content}; sent with every question so follow-ups have context
+let busy = false;
+
+function scrollChat() {
+  const box = document.getElementById("messages");
+  box.scrollTop = box.scrollHeight;
+}
+
+function newBubble(role) {
+  const box = document.getElementById("messages");
+  const empty = box.querySelector(".empty-chat");
+  if (empty) empty.remove();
+  const msg = el("div", {class: "msg " + (role === "user" ? "user" : "bot")});
+  const text = el("div", {class: "msg-text"});
+  msg.append(text);
+  box.append(msg);
+  scrollChat();
+  return {msg, text};
+}
+
+function setSending(on) {
+  busy = on;
+  document.getElementById("send").disabled = on;
+  document.getElementById("question").disabled = on;
+}
+
+async function ask(question) {
+  const q = (question || "").trim();
+  if (!q || busy) return;
+  setSending(true);
+  history.push({role: "user", content: q});
+  newBubble("user").text.textContent = q;
+
+  const bot = newBubble("bot");
+  bot.text.classList.add("typing");
+  bot.text.textContent = "Thinking";
+  let reply = "", mode = "error", failed = false;
+
+  try {
+    const res = await fetch("/api/chat/stream", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({messages: history.slice(-12)}),
+    });
+    if (!res.ok || !res.body) throw new Error("HTTP " + res.status);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const {value, done} = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, {stream: true});
+      let cut;
+      while ((cut = buffer.indexOf("\n\n")) !== -1) {
+        const frame = buffer.slice(0, cut);
+        buffer = buffer.slice(cut + 2);
+        const line = frame.split("\n").find(l => l.startsWith("data:"));
+        if (!line) continue;
+        const ev = JSON.parse(line.slice(5));
+        if (ev.delta) {
+          if (bot.text.classList.contains("typing")) { bot.text.classList.remove("typing"); bot.text.textContent = ""; }
+          reply += ev.delta;
+          renderInto(bot.text, reply);
+          scrollChat();
+        }
+        if (ev.error) {
+          failed = true;
+          reply = ev.error;
+          bot.text.classList.remove("typing");
+          bot.text.textContent = reply;
+        }
+        if (ev.done) mode = ev.mode;
+      }
+    }
+  } catch (err) {
+    failed = true;
+    bot.text.classList.remove("typing");
+    reply = "The chat needs the local server. Run ./start.sh and open http://127.0.0.1:8000.";
+    bot.text.textContent = reply;
+  }
+
+  if (!failed && reply) renderInto(bot.text, reply);
+  if (failed || !reply) {
+    bot.msg.classList.add("error");
+    history.pop();   // drop the unanswered question so it can be asked again cleanly
+  } else {
+    history.push({role: "assistant", content: reply});
+    bot.msg.prepend(el("span", {class: "tag"}, TAG_LABELS[mode] || "Assistant"));
+  }
+  setSending(false);
+  document.getElementById("question").focus();
+}
+
+function resetChat() {
+  history = [];
+  const box = document.getElementById("messages");
+  box.innerHTML = "";
+  box.append(el("p", {class: "empty-chat"},
+    "Ask anything about plants, machines, shifts, suppliers, costs, quality or the recommended actions. Answers use the pipeline's figures."));
+}
+
+function setupChat() {
+  const chips = document.getElementById("chips");
+  CHIPS.forEach(text => {
+    const b = el("button", {type: "button", class: "chip"}, text);
+    b.onclick = () => ask(text);
+    chips.append(b);
+  });
+  document.getElementById("composer").onsubmit = e => {
+    e.preventDefault();
+    const input = document.getElementById("question");
+    const q = input.value;
+    input.value = "";
+    ask(q);
+  };
+  document.getElementById("clearChat").onclick = resetChat;
+  resetChat();
+}
+
+
+const PALETTE = ["#3b82f6", "#eab308", "#22c55e", "#a855f7", "#f472b6", "#2dd4bf", "#f97316", "#64748b", "#84cc16", "#0ea5e9", "#e11d48", "#8b5cf6"];
+
+const fmt = {
+  pct: v => (v === null || v === undefined) ? "n/a" : (v * 100).toFixed(1) + "%",
+  int: v => (v === null || v === undefined) ? "n/a" : Math.round(v).toLocaleString(),
+  usd: v => (v === null || v === undefined) ? "n/a" : "$" + Math.round(v).toLocaleString(),
+  usdShort: v => (v === null || v === undefined) ? "n/a" : "$" + (v >= 1e6 ? (v / 1e6).toFixed(2) + "M" : Math.round(v / 1000) + "k"),
+};
+
+function el(tag, attrs = {}, text) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  if (text !== undefined && text !== null) n.textContent = text;
+  return n;
+}
+
+function selection() {
+  return {from: fFrom.value, to: fTo.value, plant: fPlant.value || "ALL", shift: fShift.value || "ALL",
+          material: fMaterial.value || "ALL"};
+}
+function key() { const s = selection(); return s.plant + "|" + s.shift; }
+// The selected dates, plant and shift, totalled from the pipeline's cleaned rows.
+function slice() {
+  const s = selection();
+  const v = AGG.viewFor(s.from, s.to, s.plant, s.shift, s.material);
+  return {label: "Selected dates", start: s.from, end: s.to,
+          comparison: AGG.compareWith(s.from, s.to, s.plant, s.shift),
+          blocks: {[key()]: v.headline}, views: {[key()]: v}};
+}
+
+function setupFilters() {
+  // Calendar fields are limited to the dates present in the export.
+  for (const f of [fFrom, fTo]) { f.min = AGG.FIRST; f.max = AGG.LAST; }
+  const lastThirty = () => { fTo.value = AGG.LAST; fFrom.value = AGG.addDays(AGG.LAST, -29) < AGG.FIRST ? AGG.FIRST : AGG.addDays(AGG.LAST, -29); };
+  const allData = () => { fFrom.value = AGG.FIRST; fTo.value = AGG.LAST; };
+  lastThirty();
+  const onDates = () => {
+    if (!fFrom.value) fFrom.value = AGG.FIRST;
+    if (!fTo.value) fTo.value = AGG.LAST;
+    if (fFrom.value > fTo.value) [fFrom.value, fTo.value] = [fTo.value, fFrom.value];
+    fFrom.value = fFrom.value < AGG.FIRST ? AGG.FIRST : fFrom.value;
+    fTo.value = fTo.value > AGG.LAST ? AGG.LAST : fTo.value;
+    render();
+  };
+  fFrom.onchange = onDates;
+  fTo.onchange = onDates;
+  document.getElementById("quickLast30").onclick = () => { lastThirty(); render(); };
+  document.getElementById("quickAll").onclick = () => { allData(); render(); };
+  fPlant.innerHTML = ""; fShift.innerHTML = "";
+  fPlant.append(el("option", {value: "ALL"}, "All plants"));
+  DATA.filters.plants.forEach(p => fPlant.append(el("option", {value: p}, p)));
+  fShift.append(el("option", {value: "ALL"}, "All shifts"));
+  DATA.filters.shifts.forEach(s => fShift.append(el("option", {value: s}, s.charAt(0) + s.slice(1).toLowerCase())));
+  fPlant.onchange = render;
+  fShift.onchange = render;
+  fMaterial.innerHTML = "";
+  fMaterial.append(el("option", {value: "ALL"}, "All materials"));
+  AGG.materialTypes().forEach(m => fMaterial.append(el("option", {value: m}, titleCase(m))));
+  fMaterial.onchange = render;
+}
+
+function tile(color, label, value, meta) {
+  const t = el("div", {class: "tile " + color});
+  t.append(el("div", {class: "label"}, label), el("div", {class: "value"}, value), el("div", {class: "meta"}, meta));
+  return t;
+}
+
+// Comparison tile: prior window -> current window, with the change. `better` says which direction is good.
+function cmp(label, prior, current, change, better, formatValue, formatChange) {
+  const card = el("article", {class: "card cmp"});
+  card.append(el("div", {class: "label"}, label));
+  const row = el("div", {class: "row"});
+  row.append(el("div", {class: "value"}, formatValue(current)));
+  let tone = "flat", text = "no change";
+  if (change !== null && change !== undefined && change !== 0) {
+    const improving = (change > 0) === (better === "up");
+    tone = improving ? "good" : "bad";
+    text = (change > 0 ? "▲ " : "▼ ") + formatChange(change);
+  }
+  row.append(el("span", {class: "pill " + tone}, text));
+  card.append(row);
+  card.append(el("div", {class: "path"}, "was " + formatValue(prior)));
+  return card;
+}
+
+function renderTiles(b, v) {
+  const box = document.getElementById("tiles");
+  box.innerHTML = "";
+  const runsRaw = DATA.row_counts.production_runs.raw;
+  box.append(tile("blue", "Production runs", fmt.int(b.K1.records),
+    "clean runs of " + fmt.int(runsRaw) + " in the export"));
+  box.append(tile("green", "Units produced", fmt.int(b.K1.numerator),
+    "plan " + fmt.int(b.K1.denominator) + " · attainment " + fmt.pct(b.K1.value)));
+  box.append(tile("purple", "Unplanned downtime", fmt.int(b.K3a.value) + " min",
+    fmt.pct(b.K3b.value) + " of scheduled minutes"));
+  const totals = v.totals || {};
+  box.append(tile("orange", "Repair + scrap cost", fmt.usdShort((totals.repair_cost_usd || 0) + (totals.scrap_cost_usd || 0)),
+    "repairs " + fmt.usdShort(totals.repair_cost_usd) + " · scrap " + fmt.usdShort(totals.scrap_cost_usd)));
+}
+
+function renderQuality(b) {
+  const box = document.getElementById("quality");
+  box.innerHTML = "";
+  const d = b.K5, mo = b.K8_moisture, pu = b.K8_purity, cost = b.K9_material_cost;
+  const qc = b.K7;
+  box.append(tile("orange", "Sample defect rate", fmt.pct(d.value),
+    fmt.int(d.numerator) + " defects in " + fmt.int(d.denominator) + " sampled units"));
+  box.append(tile("purple", "Incoming QC fail rate", fmt.pct(qc.value),
+    fmt.int(qc.numerator) + " failed of " + fmt.int(qc.denominator) + " records"));
+  box.append(tile("blue", "Average moisture", mo.value === null ? "n/a" : mo.value.toFixed(3) + " %",
+    "mean over " + fmt.int(mo.records) + " material records"));
+  box.append(tile("blue", "Average purity", pu.value === null ? "n/a" : pu.value.toFixed(2) + " %",
+    "mean over " + fmt.int(pu.records) + " material records"));
+  box.append(tile("green", "Material cost", fmt.usdShort(cost.value),
+    "across " + fmt.int(cost.records) + " material records"));
+}
+
+function renderComparisons(sl) {
+  const box = document.getElementById("comparisons");
+  box.innerHTML = "";
+  const p = sl.comparison;
+  if (!p || !p.current || !p.previous) {
+    box.append(el("p", {class: "empty-chat"}, "No earlier data to compare with for this period."));
+    return;
+  }
+  const c = p.current, prev = p.previous, d = p.change;
+  const path = prev.label + "  →  " + c.label;
+  const pts = x => (x * 100).toFixed(1) + " pts";
+  const mins = x => fmt.int(Math.abs(x)) + " min";
+  const units = x => fmt.int(Math.abs(x)) + " units";
+  const first = cmp("Plan attainment", prev.plan_attainment, c.plan_attainment, d.plan_attainment, "up",
+                    fmt.pct, pts);
+  const second = cmp("Scrap rate", prev.scrap_rate, c.scrap_rate, d.scrap_rate, "down", fmt.pct, pts);
+  const third = cmp("Unplanned downtime", prev.unplanned_minutes, c.unplanned_minutes, d.unplanned_minutes, "down",
+                    v2 => fmt.int(v2) + " min", mins);
+  [first, second, third].forEach(card => { card.append(el("div", {class: "path"}, path)); box.append(card); });
+}
+
+// Chart.js helpers. Each chart is destroyed and rebuilt, so filter changes never leave stale data.
+const charts = {};
+function chartFor(id, cardId, config, isEmpty) {
+  const card = document.getElementById(cardId);
+  card.classList.toggle("is-empty", !!isEmpty);
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+  if (isEmpty || typeof Chart === "undefined") return;
+  charts[id] = new Chart(document.getElementById(id), config);
+}
+
+const baseOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {legend: {position: "bottom", labels: {usePointStyle: true, boxWidth: 8, color: "#334155"}}},
+};
+
+function pieConfig(labels, values, valueFormat) {
+  return {
+    type: "pie",
+    data: {labels, datasets: [{data: values, backgroundColor: labels.map((_, i) => PALETTE[i % PALETTE.length]),
+                               borderColor: "#fff", borderWidth: 2}]},
+    options: {...baseOptions, plugins: {...baseOptions.plugins, legend: {position: "right", labels: {boxWidth: 10, color: "#334155"}},
+      tooltip: {callbacks: {label: ctx => {
+        const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+        const val = ctx.parsed;
+        return " " + ctx.label + ": " + valueFormat(val) + " (" + (total ? (val / total * 100).toFixed(1) : "0") + "%)";
+      }}}}},
+  };
+}
+
+function barConfig(labels, datasets, {horizontal = false, stacked = false, valueFormat = v => v} = {}) {
+  return {
+    type: "bar",
+    data: {labels, datasets},
+    options: {
+      ...baseOptions,
+      indexAxis: horizontal ? "y" : "x",
+      scales: {
+        x: {stacked, grid: {color: "#eee9dc"}, ticks: {color: "#64748b", callback: v => horizontal ? valueFormat(v) : undefined}},
+        y: {stacked, grid: {color: horizontal ? "transparent" : "#eee9dc"}, ticks: {color: "#334155", callback: v => horizontal ? undefined : valueFormat(v)}},
+      },
+      plugins: {...baseOptions.plugins, tooltip: {callbacks: {label: ctx => " " + ctx.dataset.label + ": " + valueFormat(ctx.parsed[horizontal ? "x" : "y"])}}},
+    },
+  };
+}
+
+function lineConfig(labels, datasets, dual = false) {
+  return {
+    type: "line",
+    data: {labels, datasets},
+    options: {
+      ...baseOptions,
+      interaction: {mode: "index", intersect: false},
+      scales: {
+        x: {grid: {display: false}, ticks: {color: "#64748b", maxTicksLimit: 8}},
+        y: {position: "left", grid: {color: "#eee9dc"}, ticks: {color: "#64748b", callback: v => (v * 100).toFixed(dual ? 1 : 1) + "%"}},
+        y1: {display: dual, position: "right", grid: {display: false}, ticks: {color: "#64748b", callback: v => (v * 100).toFixed(1) + "%"}},
+      },
+    },
+  };
+}
+
+function renderCharts(v) {
+  // Downtime pie
+  const dt = v.downtime_by_category || [];
+  chartFor("chartDowntime", "cardDowntime",
+    pieConfig(dt.map(r => titleCase(r.label)), dt.map(r => r.minutes), m => fmt.int(m) + " min"), dt.length === 0);
+
+  // Loss by plant, stacked
+  const pl = v.loss_by_plant || [];
+  chartFor("chartPlantLoss", "cardPlantLoss", barConfig(pl.map(r => r.label), [
+    {label: "Scrap cost", data: pl.map(r => r.scrap_cost_usd), backgroundColor: "#f472b6"},
+    {label: "Repair cost", data: pl.map(r => r.repair_cost_usd), backgroundColor: "#3b82f6"},
+  ], {stacked: true, valueFormat: fmt.usdShort}), pl.length === 0);
+
+  // Runs by product pie
+  const pr = v.runs_by_product || [];
+  chartFor("chartProduct", "cardProduct",
+    pieConfig(pr.map(r => r.label), pr.map(r => r.runs), n => fmt.int(n) + " runs"), pr.length === 0);
+
+  // Scrap rate by plant and line, horizontal
+  const ln = v.scrap_by_line || [];
+  chartFor("chartLine", "cardLine", barConfig(ln.map(r => r.label), [
+    {label: "Scrap rate", data: ln.map(r => r.scrap_rate), backgroundColor: ln.map((_, i) => PALETTE[i % PALETTE.length])},
+  ], {horizontal: true, valueFormat: v2 => (v2 * 100).toFixed(1) + "%"}), ln.length === 0);
+
+  // Daily plan attainment and scrap rate, two axes
+  const d = v.daily || [];
+  const labels = d.map(r => r.date);
+  const trendCfg = lineConfig(labels, [
+    {label: "Plan attainment", data: d.map(r => r.plan_attainment), borderColor: "#3b82f6", backgroundColor: "#3b82f6",
+     borderWidth: 2, pointRadius: 0, tension: .25, yAxisID: "y"},
+    {label: "Scrap rate", data: d.map(r => r.scrap_rate), borderColor: "#f472b6", backgroundColor: "#f472b6",
+     borderWidth: 2, pointRadius: 0, tension: .25, yAxisID: "y1"},
+  ], true);
+  chartFor("chartTrend", "cardTrend", trendCfg, d.length === 0);
+
+  // Daily unplanned downtime with 7-day average
+  const dtCfg = lineConfig(labels, [
+    {label: "Daily minutes", data: d.map(r => r.unplanned_minutes), borderColor: "#c4b5fd", backgroundColor: "#c4b5fd",
+     borderWidth: 1.5, pointRadius: 0, tension: .2},
+    {label: "7-day average", data: d.map(r => r.unplanned_7day_avg), borderColor: "#7e22ce", backgroundColor: "#7e22ce",
+     borderWidth: 2.5, pointRadius: 0, tension: .3},
+  ]);
+  dtCfg.options.scales.y.ticks.callback = v2 => fmt.int(v2);
+  chartFor("chartDowntimeTrend", "cardDowntimeTrend", dtCfg, d.length === 0);
+
+  // Loss by machine, horizontal stacked
+  const mc = v.loss_by_machine || [];
+  chartFor("chartMachine", "cardMachine", barConfig(mc.map(r => r.label), [
+    {label: "Scrap cost", data: mc.map(r => r.scrap_cost_usd), backgroundColor: "#f472b6"},
+    {label: "Repair cost", data: mc.map(r => r.repair_cost_usd), backgroundColor: "#3b82f6"},
+  ], {horizontal: true, stacked: true, valueFormat: fmt.usdShort}), mc.length === 0);
+
+  // Supplier QC fail rate, horizontal
+  const sp = v.qc_by_supplier || [];
+  chartFor("chartSupplier", "cardSupplier", barConfig(sp.map(r => r.label), [
+    {label: "Incoming QC fail rate", data: sp.map(r => r.fail_rate),
+     backgroundColor: sp.map(r => r.fail_rate > 0.05 ? "#ef4444" : "#22c55e")},
+  ], {horizontal: true, valueFormat: v2 => (v2 * 100).toFixed(1) + "%"}), sp.length === 0);
+
+  // Defects by type, with rate and sample size on hover
+  const df = v.defect_by_type || [];
+  const defectCfg = barConfig(df.map(r => titleCase(r.label)), [
+    {label: "Defects", data: df.map(r => r.defects), backgroundColor: df.map((_, i) => PALETTE[i % PALETTE.length])},
+  ], {horizontal: true, valueFormat: n => fmt.int(n)});
+  defectCfg.options.plugins.tooltip.callbacks.label = ctx => {
+    const r = df[ctx.dataIndex];
+    return ["Defects: " + fmt.int(r.defects), "Defect rate: " + (r.rate * 100).toFixed(2) + "%",
+            "Inspections: " + fmt.int(r.inspections)];
+  };
+  chartFor("chartDefect", "cardDefect", defectCfg, df.length === 0);
+
+  // Materials by type: QC fail rate, with cost and quality means on hover
+  const mt = v.materials_by_type || [];
+  const materialCfg = barConfig(mt.map(r => titleCase(r.label)), [
+    {label: "QC fail rate", data: mt.map(r => r.fail_rate),
+     backgroundColor: mt.map(r => selection().material === "ALL" || r.label === selection().material ? "#f97316" : "#fdba74")},
+  ], {valueFormat: x => (x * 100).toFixed(1) + "%"});
+  materialCfg.options.plugins.tooltip.callbacks.label = ctx => {
+    const r = mt[ctx.dataIndex];
+    return ["QC fail rate: " + (r.fail_rate * 100).toFixed(1) + "%", "Records: " + fmt.int(r.records),
+            "Cost: " + fmt.usd(r.cost_usd), "Moisture (mean): " + r.moisture_mean.toFixed(3) + " %",
+            "Purity (mean): " + r.purity_mean.toFixed(2) + " %"];
+  };
+  chartFor("chartMaterial", "cardMaterial", materialCfg, mt.length === 0);
+}
+
+function titleCase(s) {
+  return String(s).toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase());
+}
+
+function renderMeta() {
+  const m = DATA.meta;
+  const c = DATA.row_counts;
+  const quarantined = Object.values(c).reduce((a, x) => a + x.quarantined, 0);
+  const sl = slice();
+  document.getElementById("subtitle").textContent = "Showing " + AGG.fmtDay(sl.start) + " to " + AGG.fmtDay(sl.end);
+  document.getElementById("about").textContent =
+    "Source " + m.input_file + " · " + c.production_runs.clean.toLocaleString() + " of " + c.production_runs.raw.toLocaleString() +
+    " production runs pass quality checks · " + quarantined.toLocaleString() + " rows excluded across all tables · pipeline " +
+    m.pipeline_version + " · " + m.database;
+}
+
+function render() {
+  const sl = slice();
+  const b = sl.blocks[key()];
+  const v = sl.views[key()];
+  renderTiles(b, v);
+  renderQuality(b);
+  renderComparisons(sl);
+  renderCharts(v);
+  renderMeta();
+}
+
+function init() {
+  if (!DATA) { document.body.append(el("p", {}, "No data embedded. Run the pipeline to generate this page.")); return; }
+  setupFilters();
+  setupChat();
+  render();
+}
+
+init();
+</script>
+</body>
+</html>
